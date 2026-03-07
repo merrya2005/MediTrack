@@ -1,5 +1,7 @@
 import 'package:admin_app/homepage.dart';
+import 'package:admin_app/main.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,11 +19,37 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   void _handleLogin() async {
-    // Navigate to Dashboard
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
-    );
+    // print(_usernameController.text);
+
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: _usernameController.text,
+        password: _passwordController.text,
+      );
+      print(response.user);
+      final data = await supabase
+          .from("tbl_admin")
+          .select()
+          .eq("id", response.user!.id)
+          .single();
+      if (data != "") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Invalid credentials. Please try again."),
+          ),
+        );
+      }
+    } catch (e) {
+      print("Login error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login failed. Please try again.")),
+      );
+    }
   }
 
   @override

@@ -1,6 +1,9 @@
+import 'package:admin_app/category.dart';
+import 'package:admin_app/district.dart';
 import 'package:admin_app/login.dart';
 import 'package:admin_app/manage_caretaker.dart';
 import 'package:admin_app/manage_patient.dart';
+import 'package:admin_app/place.dart';
 import 'package:flutter/material.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -26,18 +29,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // Ensure this list order matches the order of your sidebar items
   final List<Widget> _pages = [
     const DashboardOverview(), // See the helper class created below
+    const District(),
+    const medicinecategory(),
     const ManageCaretakers(),
-    const ManagePatients(),
+    const ManagePatient(),
+
     const Center(
       child: Text("Activity Logs Content", style: TextStyle(fontSize: 18)),
     ),
+    const Place(),
   ];
 
   final List<String> _pageTitles = [
     "Dashboard",
+    "District",
+    "Medicine Category",
     "Caretaker Management",
     "Patient Records",
     "System Logs",
+    "Place",
   ];
 
   @override
@@ -99,9 +109,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 20),
 
           _buildMenuItem(0, "Dashboard", Icons.grid_view_rounded),
-          _buildMenuItem(1, "Caretakers", Icons.badge_outlined),
-          _buildMenuItem(2, "Patients", Icons.person_search_rounded),
-          _buildMenuItem(3, "Activity Logs", Icons.history_rounded),
+          _buildMenuItem(1, "District", Icons.location_city),
+          _buildMenuItem(2, "Medicine Category", Icons.category_outlined),
+          _buildMenuItem(3, "Caretakers", Icons.badge_outlined),
+          _buildMenuItem(4, "Patients", Icons.person_search_rounded),
+          _buildMenuItem(5, "Activity Logs", Icons.history_rounded),
+          _buildMenuItem(6, "Place", Icons.location_on_rounded),
 
           const Spacer(),
           ListTile(

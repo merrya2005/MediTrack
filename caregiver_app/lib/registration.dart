@@ -1,3 +1,4 @@
+import 'package:caregiver_app/login.dart';
 import 'package:caregiver_app/main.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -355,7 +356,14 @@ class _CaregiverRegState extends State<CaregiverReg> {
         children: [
           const Text("Already a partner? "),
           TextButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CaregiverLoginScreen(),
+                ),
+              );
+            },
             child: const Text(
               "Login",
               style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),

@@ -1,5 +1,6 @@
 import 'package:admin_app/category.dart';
 import 'package:admin_app/login.dart';
+import 'package:admin_app/manage_patient.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

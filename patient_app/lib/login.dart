@@ -1,7 +1,9 @@
 import 'package:patient_app/homepage.dart';
+import 'package:patient_app/main.dart';
 import 'package:patient_app/registration.dart';
 import 'package:flutter/material.dart';
 import 'package:patient_app/homepage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PatientLoginScreen extends StatefulWidget {
   const PatientLoginScreen({super.key});
@@ -18,10 +20,35 @@ class _PatientLoginScreenState extends State<PatientLoginScreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => PatientHomeScreen()),
-    );
+    try {
+      final response = await supabase.auth.signInWithPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      print(response.user);
+      final data = await supabase
+          .from("tbl_patient")
+          .select()
+          .eq("id", response.user!.id)
+          .single();
+      if (data != "") {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const PatientHomeScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Invalid credentials. Please try again."),
+          ),
+        );
+      }
+    } catch (e) {
+      print("Login error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Login failed. Please try again.")),
+      );
+    }
   }
 
   @override

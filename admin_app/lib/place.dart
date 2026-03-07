@@ -1,51 +1,48 @@
 import 'package:admin_app/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:admin_app/category.dart';
 
-class medicinecategory extends StatefulWidget {
-  const medicinecategory({super.key});
+class Place extends StatefulWidget {
+  const Place({super.key});
 
   @override
-  State<medicinecategory> createState() => _medicinecategoryState();
+  State<Place> createState() => _PlaceState();
 }
 
-class _medicinecategoryState extends State<medicinecategory> {
+class _PlaceState extends State<Place> {
   bool _isFormVisible = false;
   final Duration _animationDuration = const Duration(milliseconds: 300);
 
-  final TextEditingController _medicinecategoryController =
-      TextEditingController();
+  final TextEditingController _PlaceController = TextEditingController();
+  final TextEditingController _districtController = TextEditingController();
 
-  List<Map<String, dynamic>> medicinecategoryList = [];
+  List<Map<String, dynamic>> placeList = [];
 
-  Future<void> insertmedicinecategory() async {
+  Future<void> insertPlace() async {
     try {
-      String name = _medicinecategoryController.text;
-      await supabase.from('tbl_medicinecategory').insert({
-        'medicinecategory_name': name,
-      });
+      String name = _PlaceController.text;
+      await supabase.from('tbl_place').insert({'place_name': name});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            "Medicine Category Added Successfully",
+            "Place Added Successfully",
             style: TextStyle(color: Colors.white),
           ),
           backgroundColor: Colors.green,
         ),
       );
-      fetchmedicinecategory();
-      _medicinecategoryController.clear();
+      fetchPlace();
+      _PlaceController.clear();
     } catch (e) {
       print("ERROR INSERTING DATA: $e");
     }
   }
 
-  Future<void> fetchmedicinecategory() async {
+  Future<void> fetchPlace() async {
     try {
-      final response = await supabase.from('tbl_medicinecategory').select();
+      final response = await supabase.from('tbl_place').select();
       setState(() {
-        medicinecategoryList = response;
+        placeList = response;
       });
     } catch (e) {
       print("ERROR FETCHING DATA: $e");
@@ -54,23 +51,23 @@ class _medicinecategoryState extends State<medicinecategory> {
 
   int did = 0;
 
-  Future<void> editmedicinecategory() async {
+  Future<void> editPlace() async {
     try {
       await supabase
-          .from('tbl_medicinecategory')
-          .update({'medicinecategory_name': _medicinecategoryController.text})
+          .from('tbl_place')
+          .update({'place_name': _PlaceController.text})
           .eq('id', did);
-      fetchmedicinecategory();
-      _medicinecategoryController.clear();
+      fetchPlace();
+      _PlaceController.clear();
     } catch (e) {
       print("ERROR UPDATING DATA: $e");
     }
   }
 
-  Future<void> deleteCategory(String did) async {
+  Future<void> deletePlace(String did) async {
     try {
-      await supabase.from("tbl_medicinecategory").delete().eq("id", did);
-      fetchmedicinecategory();
+      await supabase.from("tbl_place").delete().eq("id", did);
+      fetchPlace();
     } catch (e) {
       print("ERROR: $e");
     }
@@ -79,7 +76,7 @@ class _medicinecategoryState extends State<medicinecategory> {
   @override
   void initState() {
     super.initState();
-    fetchmedicinecategory();
+    fetchPlace();
   }
 
   @override
@@ -92,7 +89,7 @@ class _medicinecategoryState extends State<medicinecategory> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Manage MedicineCategories",
+                "Manage Places",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               ElevatedButton.icon(
@@ -107,13 +104,13 @@ class _medicinecategoryState extends State<medicinecategory> {
                   setState(() {
                     _isFormVisible = !_isFormVisible;
                     if (!_isFormVisible) {
-                      _medicinecategoryController.clear();
+                      _PlaceController.clear();
                       did = 0;
                     }
                   });
                 },
                 label: Text(
-                  _isFormVisible ? "Cancel" : "Add Medicine Category",
+                  _isFormVisible ? "Cancel" : "Add Place",
                   style: TextStyle(color: Colors.white),
                 ),
                 icon: Icon(
@@ -129,12 +126,24 @@ class _medicinecategoryState extends State<medicinecategory> {
             child: _isFormVisible
                 ? Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      controller: _medicinecategoryController,
-                      decoration: InputDecoration(
-                        labelText: "MedicineCategory Name",
-                        border: OutlineInputBorder(),
-                      ),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _districtController,
+                          decoration: InputDecoration(
+                            labelText: "District Name",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        TextField(
+                          controller: _PlaceController,
+                          decoration: InputDecoration(
+                            labelText: "Place Name",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 : Container(),
@@ -150,16 +159,16 @@ class _medicinecategoryState extends State<medicinecategory> {
               ),
               onPressed: () {
                 if (did == 0) {
-                  insertmedicinecategory();
+                  insertPlace();
                 } else {
-                  editmedicinecategory();
+                  editPlace();
                 }
               },
               child: Text("Submit", style: TextStyle(color: Colors.white)),
             ),
           SizedBox(height: 20),
           Text(
-            "MedicineCategories ",
+            "Places ",
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           Expanded(
@@ -168,29 +177,29 @@ class _medicinecategoryState extends State<medicinecategory> {
               child: DataTable(
                 columns: [
                   DataColumn(label: Text("Sl No")),
-                  DataColumn(label: Text("MedicineCategory Name")),
+                  DataColumn(label: Text("Place Name")),
                   DataColumn(label: Text("Action")),
                 ],
-                rows: medicinecategoryList.asMap().entries.map((entry) {
+                rows: placeList.asMap().entries.map((entry) {
                   return DataRow(
                     cells: [
                       DataCell(Text((entry.key + 1).toString())),
-                      DataCell(Text(entry.value['medicinecategory_name'])),
+                      DataCell(Text(entry.value['place_name'])),
                       DataCell(
                         Row(
                           children: [
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               onPressed: () {
-                                deleteCategory(entry.value['id'].toString());
+                                deletePlace(entry.value['id'].toString());
                               },
                             ),
                             IconButton(
                               icon: const Icon(Icons.edit, color: Colors.green),
                               onPressed: () {
                                 setState(() {
-                                  _medicinecategoryController.text =
-                                      entry.value['medicinecategory_name'];
+                                  _PlaceController.text =
+                                      entry.value['place_name'];
                                   did = entry.value['id'];
                                   _isFormVisible = true;
                                 });
