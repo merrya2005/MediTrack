@@ -9,66 +9,76 @@ class District extends StatefulWidget {
 }
 
 class _DistrictState extends State<District> {
-  bool _isFormVisible = false;
-  final Duration _animationDuration = const Duration(milliseconds: 300);
-
   final TextEditingController _districtController = TextEditingController();
-
   List<Map<String, dynamic>> districtList = [];
-
-  Future<void> insertDistrict() async {
-    try {
-      String name = _districtController.text;
-      await supabase.from('tbl_district').insert({'district_name': name});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "District Added Successfully",
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      fetchDistricts();
-      _districtController.clear();
-    } catch (e) {
-      print("ERROR INSERTING DATA: $e");
-    }
-  }
+  bool _isLoading = false;
+  int? editId;
 
   Future<void> fetchDistricts() async {
+    setState(() => _isLoading = true);
     try {
-      final response = await supabase.from('tbl_district').select();
+      final response = await supabase
+          .from('tbl_district')
+          .select()
+          .order('district_name', ascending: true);
       setState(() {
-        districtList = response;
+        districtList = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print("ERROR FETCHING DATA: $e");
+      debugPrint("ERROR FETCHING DISTRICTS: $e");
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  int did = 0;
+  Future<void> handleSubmit() async {
+    if (_districtController.text.isEmpty) return;
 
-  Future<void> editDistrict() async {
+    setState(() => _isLoading = true);
     try {
-      await supabase
-          .from('tbl_district')
-          .update({'district_name': _districtController.text})
-          .eq('id', did);
-      fetchDistricts();
+      if (editId == null) {
+        await supabase
+            .from('tbl_district')
+            .insert({'district_name': _districtController.text});
+        _showSnackBar("District Added Successfully", Colors.green);
+      } else {
+        await supabase
+            .from('tbl_district')
+            .update({'district_name': _districtController.text})
+            .eq('id', editId!);
+        _showSnackBar("District Updated Successfully", Colors.blue);
+      }
       _districtController.clear();
+      setState(() => editId = null);
+      fetchDistricts();
     } catch (e) {
-      print("ERROR UPDATING DATA: $e");
+      debugPrint("ERROR SUBMITTING DISTRICT: $e");
+      _showSnackBar("Error occurred", Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> deleteDistrict(String did) async {
+  Future<void> deleteDistrict(int id) async {
     try {
-      await supabase.from("tbl_district").delete().eq("id", did);
+      await supabase.from("tbl_district").delete().eq("id", id);
+      _showSnackBar("District Deleted", Colors.orange);
       fetchDistricts();
     } catch (e) {
-      print("ERROR: $e");
+      debugPrint("ERROR DELETING DISTRICT: $e");
     }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   @override
@@ -79,124 +89,158 @@ class _DistrictState extends State<District> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(18.0),
-      child: Column(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F6),
+      body: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Manage Districts",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF161616),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 25, vertical: 18),
+          // Sidebar-like Form
+          Container(
+            width: 350,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(5, 0),
                 ),
-                onPressed: () {
-                  setState(() {
-                    _isFormVisible = !_isFormVisible;
-                    if (!_isFormVisible) {
-                      _districtController.clear();
-                      did = 0;
-                    }
-                  });
-                },
-                label: Text(
-                  _isFormVisible ? "Cancel" : "Add District",
-                  style: TextStyle(color: Colors.white),
-                ),
-                icon: Icon(
-                  _isFormVisible ? Icons.cancel : Icons.add,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          AnimatedSize(
-            duration: _animationDuration,
-            curve: Curves.easeInOut,
-            child: _isFormVisible
-                ? Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      controller: _districtController,
-                      decoration: InputDecoration(
-                        labelText: "District Name",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  )
-                : Container(),
-          ),
-          if (_isFormVisible)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: EdgeInsets.symmetric(vertical: 15, horizontal: 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-              onPressed: () {
-                if (did == 0) {
-                  insertDistrict();
-                } else {
-                  editDistrict();
-                }
-              },
-              child: Text("Submit", style: TextStyle(color: Colors.white)),
+              ],
             ),
-          SizedBox(height: 20),
-          Text(
-            "Districts ",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: [
-                  DataColumn(label: Text("Sl No")),
-                  DataColumn(label: Text("District Name")),
-                  DataColumn(label: Text("Action")),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  editId == null ? "Add District" : "Edit District",
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Manage geographic districts for categorization.",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                TextField(
+                  controller: _districtController,
+                  decoration: const InputDecoration(
+                    labelText: "District Name",
+                    hintText: "Enter district name",
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : handleSubmit,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(editId == null ? "Save District" : "Update District"),
+                ),
+                if (editId != null) ...[
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        editId = null;
+                        _districtController.clear();
+                      });
+                    },
+                    child: const Text("Cancel Edit"),
+                  ),
                 ],
-                rows: districtList.asMap().entries.map((entry) {
-                  return DataRow(
-                    cells: [
-                      DataCell(Text((entry.key + 1).toString())),
-                      DataCell(Text(entry.value['district_name'])),
-                      DataCell(
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                deleteDistrict(entry.value['id'].toString());
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.green),
-                              onPressed: () {
-                                setState(() {
-                                  _districtController.text =
-                                      entry.value['district_name'];
-                                  did = entry.value['id'];
-                                  _isFormVisible = true;
-                                });
-                              },
-                            ),
-                          ],
+              ],
+            ),
+          ),
+          // Main Content List
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "District Directory",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2937),
                         ),
                       ),
+                      IconButton(
+                        onPressed: fetchDistricts,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: "Refresh List",
+                      ),
                     ],
-                  );
-                }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _isLoading && districtList.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: Colors.grey[200]!),
+                            ),
+                            child: districtList.isEmpty
+                                ? const Center(child: Text("No districts found"))
+                                : ListView.separated(
+                                    padding: const EdgeInsets.all(16),
+                                    itemCount: districtList.length,
+                                    separatorBuilder: (context, index) =>
+                                        const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final district = districtList[index];
+                                      return ListTile(
+                                        title: Text(
+                                          district['district_name'],
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit_outlined,
+                                                  color: Colors.blue),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _districtController.text =
+                                                      district['district_name'];
+                                                  editId = district['id'];
+                                                });
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  color: Colors.red),
+                                              onPressed: () => deleteDistrict(
+                                                  district['id']),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                  ),
+                ],
               ),
             ),
           ),

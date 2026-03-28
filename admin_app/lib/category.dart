@@ -1,7 +1,5 @@
 import 'package:admin_app/main.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:admin_app/category.dart';
 
 class medicinecategory extends StatefulWidget {
   const medicinecategory({super.key});
@@ -11,197 +9,243 @@ class medicinecategory extends StatefulWidget {
 }
 
 class _medicinecategoryState extends State<medicinecategory> {
-  bool _isFormVisible = false;
-  final Duration _animationDuration = const Duration(milliseconds: 300);
+  final TextEditingController _categoryController = TextEditingController();
+  List<Map<String, dynamic>> categoryList = [];
+  bool _isLoading = false;
+  int? editId;
 
-  final TextEditingController _medicinecategoryController =
-      TextEditingController();
-
-  List<Map<String, dynamic>> medicinecategoryList = [];
-
-  Future<void> insertmedicinecategory() async {
+  Future<void> fetchCategories() async {
+    setState(() => _isLoading = true);
     try {
-      String name = _medicinecategoryController.text;
-      await supabase.from('tbl_medicinecategory').insert({
-        'medicinecategory_name': name,
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Medicine Category Added Successfully",
-            style: TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      fetchmedicinecategory();
-      _medicinecategoryController.clear();
-    } catch (e) {
-      print("ERROR INSERTING DATA: $e");
-    }
-  }
-
-  Future<void> fetchmedicinecategory() async {
-    try {
-      final response = await supabase.from('tbl_medicinecategory').select();
-      setState(() {
-        medicinecategoryList = response;
-      });
-    } catch (e) {
-      print("ERROR FETCHING DATA: $e");
-    }
-  }
-
-  int did = 0;
-
-  Future<void> editmedicinecategory() async {
-    try {
-      await supabase
+      final response = await supabase
           .from('tbl_medicinecategory')
-          .update({'medicinecategory_name': _medicinecategoryController.text})
-          .eq('id', did);
-      fetchmedicinecategory();
-      _medicinecategoryController.clear();
+          .select()
+          .order('medicinecategory_name', ascending: true);
+      setState(() {
+        categoryList = List<Map<String, dynamic>>.from(response);
+      });
     } catch (e) {
-      print("ERROR UPDATING DATA: $e");
+      debugPrint("ERROR FETCHING CATEGORIES: $e");
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> deleteCategory(String did) async {
+  Future<void> handleSubmit() async {
+    if (_categoryController.text.isEmpty) return;
+
+    setState(() => _isLoading = true);
     try {
-      await supabase.from("tbl_medicinecategory").delete().eq("id", did);
-      fetchmedicinecategory();
+      if (editId == null) {
+        await supabase
+            .from('tbl_medicinecategory')
+            .insert({'medicinecategory_name': _categoryController.text});
+        _showSnackBar("Category Added Successfully", Colors.green);
+      } else {
+        await supabase
+            .from('tbl_medicinecategory')
+            .update({'medicinecategory_name': _categoryController.text})
+            .eq('id', editId!);
+        _showSnackBar("Category Updated Successfully", Colors.blue);
+      }
+      _categoryController.clear();
+      setState(() => editId = null);
+      fetchCategories();
     } catch (e) {
-      print("ERROR: $e");
+      debugPrint("ERROR SUBMITTING CATEGORY: $e");
+      _showSnackBar("Error occurred", Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> deleteCategory(int id) async {
+    try {
+      await supabase.from("tbl_medicinecategory").delete().eq("id", id);
+      _showSnackBar("Category Deleted", Colors.orange);
+      fetchCategories();
+    } catch (e) {
+      debugPrint("ERROR DELETING CATEGORY: $e");
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   @override
   void initState() {
     super.initState();
-    fetchmedicinecategory();
+    fetchCategories();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(18.0),
-      child: Column(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F4F6),
+      body: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Manage MedicineCategories",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF161616),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 25, vertical: 18),
+          // Sidebar Form
+          Container(
+            width: 350,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(5, 0),
                 ),
-                onPressed: () {
-                  setState(() {
-                    _isFormVisible = !_isFormVisible;
-                    if (!_isFormVisible) {
-                      _medicinecategoryController.clear();
-                      did = 0;
-                    }
-                  });
-                },
-                label: Text(
-                  _isFormVisible ? "Cancel" : "Add Medicine Category",
-                  style: TextStyle(color: Colors.white),
-                ),
-                icon: Icon(
-                  _isFormVisible ? Icons.cancel : Icons.add,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          AnimatedSize(
-            duration: _animationDuration,
-            curve: Curves.easeInOut,
-            child: _isFormVisible
-                ? Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      controller: _medicinecategoryController,
-                      decoration: InputDecoration(
-                        labelText: "MedicineCategory Name",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  )
-                : Container(),
-          ),
-          if (_isFormVisible)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: EdgeInsets.symmetric(vertical: 15, horizontal: 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-              onPressed: () {
-                if (did == 0) {
-                  insertmedicinecategory();
-                } else {
-                  editmedicinecategory();
-                }
-              },
-              child: Text("Submit", style: TextStyle(color: Colors.white)),
+              ],
             ),
-          SizedBox(height: 20),
-          Text(
-            "MedicineCategories ",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: [
-                  DataColumn(label: Text("Sl No")),
-                  DataColumn(label: Text("MedicineCategory Name")),
-                  DataColumn(label: Text("Action")),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  editId == null ? "Add Category" : "Edit Category",
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Define medicine categories for inventory management.",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                TextField(
+                  controller: _categoryController,
+                  decoration: const InputDecoration(
+                    labelText: "Category Name",
+                    hintText: "e.g. Antibiotics, Painkillers",
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : handleSubmit,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(editId == null ? "Save Category" : "Update Category"),
+                ),
+                if (editId != null) ...[
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        editId = null;
+                        _categoryController.clear();
+                      });
+                    },
+                    child: const Text("Cancel Edit"),
+                  ),
                 ],
-                rows: medicinecategoryList.asMap().entries.map((entry) {
-                  return DataRow(
-                    cells: [
-                      DataCell(Text((entry.key + 1).toString())),
-                      DataCell(Text(entry.value['medicinecategory_name'])),
-                      DataCell(
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                deleteCategory(entry.value['id'].toString());
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.green),
-                              onPressed: () {
-                                setState(() {
-                                  _medicinecategoryController.text =
-                                      entry.value['medicinecategory_name'];
-                                  did = entry.value['id'];
-                                  _isFormVisible = true;
-                                });
-                              },
-                            ),
-                          ],
+              ],
+            ),
+          ),
+          // List View
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Category Directory",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2937),
                         ),
                       ),
+                      IconButton(
+                        onPressed: fetchCategories,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: "Refresh List",
+                      ),
                     ],
-                  );
-                }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _isLoading && categoryList.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: Colors.grey[200]!),
+                            ),
+                            child: categoryList.isEmpty
+                                ? const Center(child: Text("No categories found"))
+                                : ListView.separated(
+                                    padding: const EdgeInsets.all(16),
+                                    itemCount: categoryList.length,
+                                    separatorBuilder: (context, index) =>
+                                        const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final category = categoryList[index];
+                                      return ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: Colors.blue[50],
+                                          child: const Icon(Icons.category_outlined,
+                                              color: Colors.blue, size: 20),
+                                        ),
+                                        title: Text(
+                                          category['medicinecategory_name'],
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit_outlined,
+                                                  color: Colors.blue),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _categoryController.text =
+                                                      category['medicinecategory_name'];
+                                                  editId = category['id'];
+                                                });
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  color: Colors.red),
+                                              onPressed: () => deleteCategory(
+                                                  category['id']),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                  ),
+                ],
               ),
             ),
           ),

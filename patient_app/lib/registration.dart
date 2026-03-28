@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:patient_app/login.dart';
 import 'package:patient_app/main.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PatientReg extends StatefulWidget {
   const PatientReg({super.key});
@@ -12,390 +13,359 @@ class PatientReg extends StatefulWidget {
 
 class _PatientRegState extends State<PatientReg> {
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _isPasswordVisible = false;
 
-  TextEditingController _nameController = TextEditingController();
-  TextEditingController _emailController = TextEditingController();
-  TextEditingController _passwordController = TextEditingController();
-  TextEditingController _phoneController = TextEditingController();
-  TextEditingController _ageController = TextEditingController();
-  TextEditingController _genderController = TextEditingController();
-  TextEditingController _addressController = TextEditingController();
-  TextEditingController _emergencyController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  DateTime? _selectedDate;
+  String? _selectedGender;
+  int? _selectedDistrict;
+  int? _selectedPlace;
 
-  Future<void> _registerPatient() async {
-    AuthResponse response = await supabase.auth.signUp(
-      email: _emailController.text,
-      password: _passwordController.text,
-    );
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
+
+  List<Map<String, dynamic>> _districts = [];
+  List<Map<String, dynamic>> _places = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDistricts();
+  }
+
+  Future<void> _fetchDistricts() async {
     try {
-      await supabase.from('tbl_patient').insert({
-        'id': response.user?.id,
-        'patient_name': _nameController.text,
-        'patient_email': _emailController.text,
-        'patient_password': _passwordController.text,
-        'patient_contact': _phoneController.text,
-        'patient_dob': _ageController.text,
-        'patient_gender': _genderController.text,
-        'patient_address': _addressController.text,
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Patient registered successfully!")),
-      );
+      final response = await supabase.from('tbl_district').select();
+      setState(() => _districts = List<Map<String, dynamic>>.from(response));
     } catch (e) {
-      print("Error occurred while registering patient: $e");
+      debugPrint("Error fetching districts: $e");
+    }
+  }
+
+  Future<void> _fetchPlaces(int districtId) async {
+    try {
+      final response = await supabase
+          .from('tbl_place')
+          .select()
+          .eq('district_id', districtId);
+      setState(() {
+        _places = List<Map<String, dynamic>>.from(response);
+        _selectedPlace = null;
+      });
+    } catch (e) {
+      debugPrint("Error fetching places: $e");
+    }
+  }
+
+  Future<void> _pickImage() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take a Photo'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final XFile? image = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                  if (image != null) {
+                    setState(() => _selectedImage = File(image.path));
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from Gallery'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                  if (image != null) {
+                    setState(() => _selectedImage = File(image.path));
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate() ||
+        _selectedDate == null ||
+        _selectedPlace == null ||
+        _selectedGender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all required fields")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // 1. Sign up with Supabase Auth
+      final authResponse = await supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (authResponse.user != null) {
+        String? photoUrl;
+        
+        if (_selectedImage != null) {
+          try {
+            final fileExt = _selectedImage!.path.split('.').last;
+            final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+            final filePath = 'patient_photos/$fileName';
+            
+            await supabase.storage.from('patient_photos').upload(filePath, _selectedImage!);
+            photoUrl = supabase.storage.from('patient_photos').getPublicUrl(filePath);
+          } catch (e) {
+            debugPrint("Image upload error: $e");
+          }
+        }
+
+        // 2. Insert into tbl_patient
+        await supabase.from('tbl_patient').insert({
+          'patient_name': _nameController.text.trim(),
+          'patient_email': _emailController.text.trim(),
+          'patient_password': _passwordController.text.trim(),
+          'patient_contact': _phoneController.text.trim(),
+          'patient_dob': _selectedDate!.toIso8601String().split('T')[0],
+          'patient_gender': _selectedGender,
+          'patient_address': _addressController.text.trim(),
+          'place_id': _selectedPlace,
+          if (photoUrl != null) 'patient_photo': photoUrl,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Account created successfully! Please login."),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const PatientLoginScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Registration error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() => _selectedDate = picked);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(context).size.width;
-    bool isWideScreen = screenWidth > 800;
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(),
-        child: Center(
-          // Centers the form on larger screens
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isWideScreen ? screenWidth * 0.1 : 20,
-              vertical: 40,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // --- 1. LOGO & BRAND SECTION ---
-                _buildBrandSection(),
-                const SizedBox(height: 40),
-
-                // --- 2. MAIN FORM CONTAINER ---
-                Container(
-                  constraints: const BoxConstraints(
-                    maxWidth: 1000,
-                  ), // Prevents form from being too wide
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
+      backgroundColor: const Color(0xFFF3F4F6),
+      appBar: AppBar(
+        title: const Text("Create Account"),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1F2937),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.all(isWideScreen ? 50 : 24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Create Patient Account",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 25),
-
-                          _buildResponsiveRow(isWideScreen, [
-                            _buildField(
-                              "Full Name",
-                              Icons.person_outline,
-                              _nameController,
-                              validator: (value) => value!.isEmpty
-                                  ? 'Please enter full name'
-                                  : null,
-                            ),
-                            _buildField(
-                              "Email Address",
-                              Icons.email_outlined,
-                              _emailController,
-                              validator: (value) {
-                                if (value!.isEmpty) return 'Please enter email';
-                                if (!RegExp(
-                                  r'^[^@]+@[^@]+\.[^@]+',
-                                ).hasMatch(value))
-                                  return 'Please enter a valid email';
-                                return null;
-                              },
-                            ),
-                          ]),
-                          _buildResponsiveRow(isWideScreen, [
-                            _buildField(
-                              "Password",
-                              Icons.lock_outline,
-                              _passwordController,
-                              isObscure: true,
-                              validator: (value) => value!.length < 6
-                                  ? 'Password must be at least 6 characters'
-                                  : null,
-                            ),
-                            _buildField(
-                              "Phone Number",
-                              Icons.phone_android_outlined,
-                              _phoneController,
-                              validator: (value) => value!.isEmpty
-                                  ? 'Please enter phone number'
-                                  : null,
-                            ),
-                          ]),
-                          _buildResponsiveRow(isWideScreen, [
-                            _buildField(
-                              "Age",
-                              Icons.calendar_today_outlined,
-                              _ageController,
-                              validator: (value) =>
-                                  value!.isEmpty ? 'Please enter age' : null,
-                            ),
-                            _buildField(
-                              "Gender",
-                              Icons.wc_outlined,
-                              _genderController,
-                              validator: (value) =>
-                                  value!.isEmpty ? 'Please enter gender' : null,
-                            ),
-                          ]),
-                          _buildField(
-                            "Residential Address",
-                            Icons.map_outlined,
-                            _addressController,
-                            validator: (value) =>
-                                value!.isEmpty ? 'Please enter address' : null,
-                          ),
-                          _buildField(
-                            "Emergency Contact",
-                            Icons.contact_emergency_outlined,
-                            _emergencyController,
-                            validator: (value) => value!.isEmpty
-                                ? 'Please enter emergency contact'
-                                : null,
-                          ),
-
-                          const SizedBox(height: 40),
-
-                          // --- 3. ACTION BUTTONS ---
-                          _buildActions(isWideScreen),
-
-                          const SizedBox(height: 30),
-                          const Divider(),
-                          const SizedBox(height: 20),
-
-                          // --- 4. ALREADY HAVE AN ACCOUNT ---
-                          Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text("Already have a patient record? "),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const PatientLoginScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: const Text(
-                                    "Login here",
-                                    style: TextStyle(
-                                      color: Colors.teal,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                ],
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: _selectedImage != null ? FileImage(_selectedImage!) : null,
+                          child: _selectedImage == null
+                              ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    const Center(child: Text("Profile Photo (Optional)", style: TextStyle(color: Colors.grey, fontSize: 12))),
+                    const SizedBox(height: 24),
+                    const Text(
+                      "Personal Information",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildTextField(_nameController, "Full Name", Icons.person_outline),
+                    const SizedBox(height: 16),
+                    _buildTextField(_emailController, "Email Address", Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress),
+                    const SizedBox(height: 16),
+                    _buildTextField(_passwordController, "Password", Icons.lock_outline,
+                        obscureText: !_isPasswordVisible,
+                        suffixIcon: IconButton(
+                          icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                        )),
+                    const SizedBox(height: 16),
+                    _buildTextField(_phoneController, "Contact Number", Icons.phone_android_outlined,
+                        keyboardType: TextInputType.phone),
+                    const SizedBox(height: 16),
+                    
+                    // Gender & DOB Column
+                    DropdownButtonFormField<String>(
+                      value: _selectedGender,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: "Gender",
+                        prefixIcon: Icon(Icons.wc_rounded),
+                      ),
+                      items: ["Male", "Female", "Other"]
+                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedGender = val),
+                    ),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () => _selectDate(context),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: "Date of Birth",
+                          prefixIcon: Icon(Icons.calendar_month_rounded),
+                        ),
+                        child: Text(_selectedDate == null
+                            ? "Select Date"
+                            : _selectedDate!.toIso8601String().split('T')[0]),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Address & Location",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildTextField(_addressController, "Residential Address", Icons.home_outlined),
+                    const SizedBox(height: 16),
+                    
+                    // District & Place Column
+                    DropdownButtonFormField<int>(
+                      value: _selectedDistrict,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: "District",
+                        prefixIcon: Icon(Icons.map_outlined),
+                      ),
+                      items: _districts
+                          .map((d) => DropdownMenuItem(
+                              value: d['id'] as int,
+                              child: Text(d['district_name'])))
+                          .toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedDistrict = val;
+                          _selectedPlace = null;
+                        });
+                        _fetchPlaces(val!);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      value: _selectedPlace,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: "Place",
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                      ),
+                      items: _places
+                          .map((p) => DropdownMenuItem(
+                              value: p['id'] as int,
+                              child: Text(p['place_name'])))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedPlace = val),
+                      disabledHint: const Text("Select District First"),
+                    ),
+                    const SizedBox(height: 48),
+                    ElevatedButton(
+                      onPressed: _isLoading ? null : _register,
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text("CREATE ACCOUNT"),
+                    ),
+                    const SizedBox(height: 20),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Already have an account? Login"),
+                    ),
+                  ],
                 ),
-
-                // Footer Copyright
-                const SizedBox(height: 40),
-                Text(
-                  "© 2026 MediTrack Health Systems. All rights reserved.",
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrandSection() {
-    return Column(
-      children: [
-        // Logo Icon
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.teal.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.auto_graph_rounded,
-            color: Colors.teal,
-            size: 40,
-          ),
-        ),
-        const SizedBox(height: 16),
-        // App Name
-        const Text(
-          "MediTrack",
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-            color: Colors.black87,
-          ),
-        ),
-        Text(
-          "Healthcare Management Simplified",
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade600,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildResponsiveRow(bool isWide, List<Widget> children) {
-    if (isWide) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: children
-              .map(
-                (child) => Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: child,
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      );
-    } else {
-      return Column(
-        children: children
-            .map(
-              (child) => Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: child,
               ),
-            )
-            .toList(),
-      );
-    }
-  }
-
-  Widget _buildField(
-    String label,
-    IconData icon,
-    TextEditingController controller, {
-    bool isObscure = false,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: isObscure,
-          validator: validator,
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: Colors.teal, size: 20),
-            filled: true,
-            fillColor: const Color(0xFFF1F4F8),
-            hintText: "Enter $label",
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            contentPadding: const EdgeInsets.all(16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.teal, width: 1.5),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActions(bool isWide) {
-    return SizedBox(
-      width: double.infinity,
-      child: isWide
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _cancelButton(),
-                const SizedBox(width: 16),
-                _submitButton(),
-              ],
-            )
-          : Column(
-              children: [
-                _submitButton(),
-                const SizedBox(height: 12),
-                _cancelButton(),
-              ],
-            ),
-    );
-  }
-
-  Widget _submitButton() {
-    return ElevatedButton(
-      onPressed: () {
-        if (_formKey.currentState!.validate()) {
-          _registerPatient();
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        minimumSize: const Size(220, 55),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 0,
-      ),
-      child: const Text(
-        "SUBMIT REGISTRATION",
-        style: TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  Widget _cancelButton() {
-    return OutlinedButton(
-      onPressed: () {},
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(150, 55),
-        side: BorderSide(color: Colors.grey.shade300),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon,
+      {bool obscureText = false, TextInputType? keyboardType, Widget? suffixIcon}) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffixIcon,
       ),
-      child: const Text("CANCEL", style: TextStyle(color: Colors.black54)),
+      validator: (value) => value == null || value.isEmpty ? "Required" : null,
     );
   }
 }

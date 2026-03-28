@@ -4,6 +4,8 @@ import 'package:admin_app/login.dart';
 import 'package:admin_app/manage_caretaker.dart';
 import 'package:admin_app/manage_patient.dart';
 import 'package:admin_app/place.dart';
+import 'package:admin_app/main.dart';
+import 'package:admin_app/complaints.dart';
 import 'package:flutter/material.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -14,66 +16,90 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  // This index controls which page is currently visible
   int _selectedIndex = 0;
 
-  void _handleLogout() {
-    debugPrint("User Logged Out");
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
-  }
-
-  // --- PAGE LIST ---
-  // Ensure this list order matches the order of your sidebar items
   final List<Widget> _pages = [
-    const DashboardOverview(), // See the helper class created below
+    const DashboardOverview(),
     const District(),
+    const Place(),
     const medicinecategory(),
     const ManageCaretakers(),
     const ManagePatient(),
-
-    const Center(
-      child: Text("Activity Logs Content", style: TextStyle(fontSize: 18)),
-    ),
-    const Place(),
+    const AdminComplaintsScreen(),
   ];
 
   final List<String> _pageTitles = [
-    "Dashboard",
-    "District",
-    "Medicine Category",
-    "Caretaker Management",
-    "Patient Records",
-    "System Logs",
-    "Place",
+    "Dashboard Overview",
+    "Manage Districts",
+    "Location Management",
+    "Medicine Categories",
+    "Caretaker Verification",
+    "Patient Directory",
+    "Resolve Complaints",
   ];
 
   @override
   Widget build(BuildContext context) {
+    bool isMobile = MediaQuery.of(context).size.width < 1024;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF3F4F6),
+      drawer: isMobile ? Drawer(child: _buildSidebar(context)) : null,
+      appBar: isMobile
+          ? AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              title: Text(
+                _pageTitles[_selectedIndex < _pageTitles.length ? _selectedIndex : 0],
+                style: const TextStyle(fontSize: 18, color: Color(0xFF1F2937), fontWeight: FontWeight.bold),
+              ),
+              leading: Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu_rounded, color: Color(0xFF1F2937)),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                ),
+              ),
+            )
+          : null,
       body: Row(
         children: [
-          // 1. SIDEBAR (Navigation Trigger)
-          _buildSidebar(),
-
-          // 2. MAIN CONTENT (Navigation Target)
+          if (!isMobile) _buildSidebar(context),
+          // Main Body
           Expanded(
             child: Column(
               children: [
-                _buildHeader(),
+                // Top Header (Desktop only)
+                if (!isMobile)
+                  Container(
+                    height: 80,
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          _pageTitles[_selectedIndex < _pageTitles.length ? _selectedIndex : 0],
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                        ),
+                        const Spacer(),
+                        const CircleAvatar(
+                          backgroundColor: Color(0xFFF3F4F6),
+                          child: Icon(Icons.notifications_none_rounded, color: Color(0xFF1F2937)),
+                        ),
+                        const SizedBox(width: 16),
+                        _adminUserBadge(),
+                      ],
+                    ),
+                  ),
+                // Content Area
                 Expanded(
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: Padding(
-                      key: ValueKey<int>(
-                        _selectedIndex,
-                      ), // Helps with smooth transitions
-                      padding: const EdgeInsets.all(24.0),
-                      child: _pages[_selectedIndex],
-                    ),
+                    duration: const Duration(milliseconds: 200),
+                    child: _pages[_selectedIndex < _pages.length ? _selectedIndex : 0],
                   ),
                 ),
               ],
@@ -84,46 +110,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar(BuildContext context) {
+    bool isMobile = MediaQuery.of(context).size.width < 1024;
     return Container(
-      width: 240,
-      color: Colors.white,
+      width: 280,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1F2937),
+      ),
       child: Column(
         children: [
-          Container(
-            height: 80,
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: const Row(
-              children: [
-                Icon(Icons.auto_graph_rounded, color: Colors.teal, size: 28),
-                SizedBox(width: 12),
-                Text(
-                  "MediTrack",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-              ],
+          const SizedBox(height: 60),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.health_and_safety_rounded, color: Color(0xFF1A73E8), size: 32),
+              SizedBox(width: 12),
+              Text("MEDITRACK",
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 2)),
+            ],
+          ),
+          const SizedBox(height: 40),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                children: [
+                  _buildSidebarItem(0, "Dashboard", Icons.dashboard_rounded, isMobile),
+                  _buildSidebarItem(1, "Districts", Icons.map_rounded, isMobile),
+                  _buildSidebarItem(2, "Places", Icons.location_on_rounded, isMobile),
+                  _buildSidebarItem(3, "Medicines", Icons.medication_rounded, isMobile),
+                  const Divider(color: Colors.white10, indent: 20, endIndent: 20),
+                  _buildSidebarItem(4, "Caretakers", Icons.people_alt_rounded, isMobile),
+                  _buildSidebarItem(5, "Patients", Icons.person_search_rounded, isMobile),
+                  _buildSidebarItem(6, "Complaints", Icons.report_problem_rounded, isMobile),
+                ],
+              ),
             ),
           ),
-          const Divider(height: 1),
-          const SizedBox(height: 20),
-
-          _buildMenuItem(0, "Dashboard", Icons.grid_view_rounded),
-          _buildMenuItem(1, "District", Icons.location_city),
-          _buildMenuItem(2, "Medicine Category", Icons.category_outlined),
-          _buildMenuItem(3, "Caretakers", Icons.badge_outlined),
-          _buildMenuItem(4, "Patients", Icons.person_search_rounded),
-          _buildMenuItem(5, "Activity Logs", Icons.history_rounded),
-          _buildMenuItem(6, "Place", Icons.location_on_rounded),
-
-          const Spacer(),
+          const Divider(color: Colors.white10),
           ListTile(
-            onTap: _handleLogout,
-            leading: const Icon(Icons.logout, color: Colors.redAccent),
-            title: const Text(
-              "Logout",
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            onTap: () async {
+              await supabase.auth.signOut();
+              if (mounted) {
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+              }
+            },
+            leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            title: const Text("Logout", style: TextStyle(color: Colors.redAccent)),
           ),
           const SizedBox(height: 20),
         ],
@@ -131,118 +164,184 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildMenuItem(int index, String title, IconData icon) {
+  Widget _buildSidebarItem(int index, String title, IconData icon, bool isMobile) {
     bool isSelected = _selectedIndex == index;
-    return ListTile(
-      selected: isSelected,
-      selectedTileColor: Colors.teal.withOpacity(0.08),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      onTap: () {
-        setState(() {
-          _selectedIndex =
-              index; // This triggers the build method to show the new page
-        });
-      },
-      leading: Icon(icon, color: isSelected ? Colors.teal : Colors.grey[600]),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isSelected ? Colors.teal : Colors.grey[800],
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF1A73E8) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        onTap: () {
+          setState(() => _selectedIndex = index);
+          if (isMobile) Navigator.pop(context);
+        },
+        leading: Icon(icon, color: isSelected ? Colors.white : Colors.white60),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white60,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _adminUserBadge() {
     return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3F2FD),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          Text(
-            _pageTitles[_selectedIndex],
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-          ),
-          const Spacer(),
-          const Row(
-            children: [
-              Text("Admin User", style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: 12),
-              CircleAvatar(
-                backgroundColor: Color(0xFFE0F2F1),
-                child: Icon(Icons.person, color: Colors.teal),
-              ),
-            ],
-          ),
+          CircleAvatar(radius: 14, backgroundColor: Color(0xFF1A73E8), child: Icon(Icons.person, size: 16, color: Colors.white)),
+          SizedBox(width: 8),
+          Text("Administrator", style: TextStyle(color: Color(0xFF1A73E8), fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 }
 
-// --- QUICK DASHBOARD OVERVIEW WIDGET ---
-class DashboardOverview extends StatelessWidget {
+class DashboardOverview extends StatefulWidget {
   const DashboardOverview({super.key});
 
   @override
+  State<DashboardOverview> createState() => _DashboardOverviewState();
+}
+
+class _DashboardOverviewState extends State<DashboardOverview> {
+  int _patientCount = 0;
+  int _caregiverCount = 0;
+  int _pendingRequests = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+  }
+
+  Future<void> _fetchStats() async {
+    try {
+      final patients = await supabase.from('tbl_patient').select('id');
+      final caregivers = await supabase.from('tbl_caregiver').select('id').eq('caregiver_status', 1);
+      final requests = await supabase.from('tbl_request').select('id').eq('request_status', 0);
+
+      setState(() {
+        _patientCount = (patients as List).length;
+        _caregiverCount = (caregivers as List).length;
+        _pendingRequests = (requests as List).length;
+      });
+    } catch (e) {
+      debugPrint("Error fetching stats: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 3,
-      crossAxisSpacing: 20,
-      mainAxisSpacing: 20,
-      childAspectRatio: 2.5,
-      children: [
-        _buildStatCard("Total Patients", "124", Icons.person, Colors.blue),
-        _buildStatCard("Active Caretakers", "42", Icons.badge, Colors.teal),
-        _buildStatCard("Alerts Today", "5", Icons.warning_amber, Colors.orange),
-      ],
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width < 600 ? 16 : 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("System Insights", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          LayoutBuilder(builder: (context, constraints) {
+            double cardWidth = (constraints.maxWidth - (constraints.maxWidth > 1200 ? 72 : 24)) / 
+                              (constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 700 ? 2 : 1));
+            return Wrap(
+              spacing: 24,
+              runSpacing: 24,
+              children: [
+                _buildStatCard("Total Patients", _patientCount.toString(), Icons.person_outline, Colors.blue, cardWidth),
+                _buildStatCard("Active Caregivers", _caregiverCount.toString(), Icons.medical_services_outlined, const Color(0xFF10B981), cardWidth),
+                _buildStatCard("Pending Bookings", _pendingRequests.toString(), Icons.pending_actions_rounded, Colors.orange, cardWidth),
+                _buildStatCard("System Health", "Optimal", Icons.check_circle_outline, Colors.indigo, cardWidth),
+              ],
+            );
+          }),
+          const SizedBox(height: 48),
+          const Text("Management Console", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 24,
+            runSpacing: 24,
+            children: [
+              _buildActionCard(context, "Verify Caregivers", "Review new registration requests", Icons.verified_user),
+              _buildActionCard(context, "Security Audit", "View recent system access logs", Icons.security_rounded),
+              _buildActionCard(context, "Inventory", "Global medicine stock overview", Icons.inventory_2_rounded),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildStatCard(
-    String title,
-    String count,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildStatCard(String title, String value, IconData icon, Color color, double width) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: width,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
         ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(height: 20),
+          Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCard(
+      BuildContext context, String title, String subtitle, IconData icon) {
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
-            child: Icon(icon, color: color),
-          ),
+          Icon(icon, color: const Color(0xFF1A73E8), size: 32),
           const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                count,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-              ),
-              Text(
-                title,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ],
+                Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ],
       ),

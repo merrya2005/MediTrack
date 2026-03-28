@@ -1,39 +1,83 @@
 import 'package:flutter/material.dart';
+import 'package:caregiver_app/main.dart';
+import 'package:caregiver_app/login.dart';
+import 'package:caregiver_app/complaints.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class CaregiverProfileTab extends StatelessWidget {
+class CaregiverProfileTab extends StatefulWidget {
   const CaregiverProfileTab({super.key});
 
   @override
+  State<CaregiverProfileTab> createState() => _CaregiverProfileTabState();
+}
+
+class _CaregiverProfileTabState extends State<CaregiverProfileTab> {
+  Map<String, dynamic>? _profileData;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        final data = await supabase
+            .from('tbl_caregiver')
+            .select()
+            .eq('caregiver_email', user.email!)
+            .maybeSingle();
+        setState(() => _profileData = data);
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_profileData == null) return const Center(child: Text("Profile not found"));
+
     return Column(
       children: [
         const SizedBox(height: 30),
-        const CircleAvatar(
+        CircleAvatar(
           radius: 50,
-          backgroundColor: Colors.teal,
-          child: Icon(Icons.person, size: 50, color: Colors.white),
+          backgroundColor: Colors.indigo,
+          backgroundImage: _profileData!['caregiver_photo'] != null && _profileData!['caregiver_photo'].toString().isNotEmpty
+              ? NetworkImage(_profileData!['caregiver_photo'])
+              : null,
+          child: _profileData!['caregiver_photo'] == null || _profileData!['caregiver_photo'].toString().isEmpty
+              ? const Icon(Icons.person, size: 50, color: Colors.white)
+              : null,
         ),
         const SizedBox(height: 10),
-        const Text(
-          "Sarah Parker",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        Text(
+          _profileData!['caregiver_name'] ?? "Unknown",
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        const Text(
-          "sarah.parker@email.com",
-          style: TextStyle(color: Colors.grey),
+        Text(
+          _profileData!['caregiver_email'] ?? "",
+          style: const TextStyle(color: Colors.grey),
         ),
         const SizedBox(height: 30),
         _menuItem(
           context,
           Icons.account_circle_outlined,
           "My Profile",
-          const MyProfilePage(),
+          MyProfilePage(profileData: _profileData!),
         ),
         _menuItem(
           context,
           Icons.edit_outlined,
           "Edit Profile",
-          const EditProfilePage(),
+          EditProfilePage(profileData: _profileData!, onUpdate: _fetchProfile),
         ),
         _menuItem(
           context,
@@ -41,9 +85,23 @@ class CaregiverProfileTab extends StatelessWidget {
           "Change Password",
           const ChangePasswordPage(),
         ),
+        _menuItem(
+          context,
+          Icons.report_problem_outlined,
+          "Complaints",
+          const ComplaintsPage(),
+        ),
         const Spacer(),
         TextButton.icon(
-          onPressed: () {},
+          onPressed: () async {
+            await supabase.auth.signOut();
+            if (context.mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const CaregiverLoginScreen()),
+              );
+            }
+          },
           icon: const Icon(Icons.logout, color: Colors.red),
           label: const Text(
             "Logout",
@@ -55,43 +113,38 @@ class CaregiverProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _menuItem(
-    BuildContext context,
-    IconData icon,
-    String title,
-    Widget page,
-  ) {
+  Widget _menuItem(BuildContext context, IconData icon, String title, Widget page) {
     return ListTile(
-      leading: Icon(icon, color: Colors.teal),
+      leading: Icon(icon, color: Colors.indigo),
       title: Text(title),
       trailing: const Icon(Icons.chevron_right, size: 18),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => page),
-      ),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => page)),
     );
   }
 }
 
 class MyProfilePage extends StatelessWidget {
-  const MyProfilePage({super.key});
+  final Map<String, dynamic> profileData;
+  const MyProfilePage({super.key, required this.profileData});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("My Profile"),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1F2937),
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            _dataRow("Name", "Sarah Parker"),
-            _dataRow("Phone", "+1 234 567 890"),
-            _dataRow("Location", "Brooklyn, NY"),
-            _dataRow("Expertise", "Elderly Care"),
+            _dataRow("Name", profileData['caregiver_name'] ?? "N/A"),
+            _dataRow("Email", profileData['caregiver_email'] ?? "N/A"),
+            _dataRow("Phone", profileData['caregiver_contact'] ?? "N/A"),
+            _dataRow("Experience", "${profileData['caregiver_experience'] ?? '0'} Years"),
+            _dataRow("Address", profileData['caregiver_address'] ?? "N/A"),
           ],
         ),
       ),
@@ -102,62 +155,139 @@ class MyProfilePage extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ==========================================
-// 5. EDIT PROFILE PAGE
-// ==========================================
-class EditProfilePage extends StatelessWidget {
-  const EditProfilePage({super.key});
+class EditProfilePage extends StatefulWidget {
+  final Map<String, dynamic> profileData;
+  final VoidCallback onUpdate;
+  const EditProfilePage({super.key, required this.profileData, required this.onUpdate});
+
+  @override
+  State<EditProfilePage> createState() => _EditProfilePageState();
+}
+
+class _EditProfilePageState extends State<EditProfilePage> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _expController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.profileData['caregiver_name'] ?? "";
+    _phoneController.text = widget.profileData['caregiver_contact'] ?? "";
+    _expController.text = widget.profileData['caregiver_experience']?.toString() ?? "";
+    _addressController.text = widget.profileData['caregiver_address'] ?? "";
+    _emailController.text = widget.profileData['caregiver_email'] ?? ""; // Disabled
+  }
+
+  Future<void> _updateProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      await supabase.from('tbl_caregiver').update({
+        'caregiver_name': _nameController.text.trim(),
+        'caregiver_contact': _phoneController.text.trim(),
+        'caregiver_experience': _expController.text.trim(),
+        'caregiver_address': _addressController.text.trim(),
+      }).eq('id', widget.profileData['id']);
+      
+      widget.onUpdate();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile Updated Successfuly!", style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint("Update error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to update"), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Edit Details"),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1F2937),
+        elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             TextField(
+              controller: _emailController,
+              enabled: false,
               decoration: InputDecoration(
-                labelText: "Full Name",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                labelText: "Email (Cannot be changed)",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                fillColor: Colors.grey[200],
+                filled: true,
               ),
             ),
             const SizedBox(height: 15),
             TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: "Full Name",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _phoneController,
               decoration: InputDecoration(
                 labelText: "Phone Number",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _expController,
+              decoration: InputDecoration(
+                labelText: "Years of Experience",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _addressController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: "Address",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
             const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: _isLoading ? null : _updateProfile,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
+                backgroundColor: const Color(0xFF6366F1),
                 minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text(
-                "SAVE CHANGES",
-                style: TextStyle(color: Colors.white),
-              ),
+              child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("SAVE CHANGES", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -166,49 +296,84 @@ class EditProfilePage extends StatelessWidget {
   }
 }
 
-// ==========================================
-// 6. CHANGE PASSWORD PAGE
-// ==========================================
-class ChangePasswordPage extends StatelessWidget {
+class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
+
+  @override
+  State<ChangePasswordPage> createState() => _ChangePasswordPageState();
+}
+
+class _ChangePasswordPageState extends State<ChangePasswordPage> {
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _changePassword() async {
+    if (_newController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password must be at least 6 characters")));
+      return;
+    }
+    if (_newController.text != _confirmController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await supabase.auth.updateUser(UserAttributes(password: _newController.text));
+      
+      // Also update in our tbl_caregiver for consistency
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        await supabase.from('tbl_caregiver').update({
+          'caregiver_password': _newController.text
+        }).eq('caregiver_email', user.email!);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password updated!"), backgroundColor: Colors.green));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint("Password update error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error updating password"), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Security"),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF1F2937),
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            const TextField(
+            TextField(
+              controller: _newController,
               obscureText: true,
-              decoration: InputDecoration(labelText: "Current Password"),
+              decoration: const InputDecoration(labelText: "New Password", border: OutlineInputBorder()),
             ),
             const SizedBox(height: 15),
-            const TextField(
+            TextField(
+              controller: _confirmController,
               obscureText: true,
-              decoration: InputDecoration(labelText: "New Password"),
-            ),
-            const SizedBox(height: 15),
-            const TextField(
-              obscureText: true,
-              decoration: InputDecoration(labelText: "Confirm New Password"),
+              decoration: const InputDecoration(labelText: "Confirm New Password", border: OutlineInputBorder()),
             ),
             const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: () {},
+              onPressed: _isLoading ? null : _changePassword,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
+                backgroundColor: const Color(0xFF6366F1),
                 minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text(
-                "UPDATE PASSWORD",
-                style: TextStyle(color: Colors.white),
-              ),
+              child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("UPDATE PASSWORD", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
