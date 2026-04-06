@@ -150,6 +150,7 @@ class _MedicineStockState extends State<MedicineStock> {
       }
     });
   }
+  
 
   void _showGuideDialog() {
     showDialog(
